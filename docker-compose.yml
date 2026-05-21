@@ -1,0 +1,39 @@
+services:
+
+  mysql:
+    image: mysql:8.0
+    container_name: estacionamento-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: estacionamento
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  simulator:
+    image: cfontes0estapar/garage-sim:1.0.0
+    container_name: estacionamento-simulator
+    network_mode: host
+
+  app:
+    build: .
+    container_name: estacionamento-app
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "3003:3003"
+    environment:
+      DB_USER: root
+      DB_PASS: root
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/estacionamento?createDatabaseIfNotExist=true
+      GARAGE_SIMULATOR_URL: http://localhost:8282
+
+volumes:
+  mysql_data:
