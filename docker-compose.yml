@@ -7,7 +7,7 @@ services:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: estacionamento
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -33,7 +33,7 @@ services:
       DB_USER: root
       DB_PASS: root
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/estacionamento?createDatabaseIfNotExist=true
-      GARAGE_SIMULATOR_URL: http://localhost:8282
+      GARAGE_SIMULATOR_URL: http://simulator:3000
 
 volumes:
   mysql_data:
