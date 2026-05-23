@@ -1,141 +1,424 @@
-# Estapar Parking — Backend
+# Estapar Backend Developer Test
 
-Sistema de gerenciamento de estacionamento desenvolvido com **Kotlin 2.1**, **Spring Boot 3.3** e **MySQL**.
-
----
-
-## Pré-requisitos
-
-- Java 21+
-- Docker e Docker Compose
-- Gradle (ou use o wrapper `./gradlew`)
+Sistema backend para gerenciamento de estacionamento desenvolvido com **Kotlin + Spring Boot + MySQL**, integrado ao simulador fornecido no desafio técnico da Estapar.
 
 ---
 
-## Como rodar
+# Tecnologias utilizadas
 
-### Opção 1 — Docker Compose (recomendado)
+* Kotlin 2.1.x
+* Java 21
+* Spring Boot
+* Spring Data JPA
+* MySQL 8
+* Flyway
+* Docker / Docker Compose
+* Swagger / OpenAPI
+* JUnit 5
+* Mockito
+* H2 Database
+* Gradle Kotlin DSL
 
-Sobe MySQL + simulador + aplicação com um único comando:
+---
+
+# Funcionalidades
+
+* Consumo automático da configuração da garagem via `GET /garage`
+* Armazenamento de setores e vagas
+* Recebimento de eventos via webhook:
+
+  * ENTRY
+  * PARKED
+  * EXIT
+* Controle de ocupação das vagas
+* Controle de lotação por setor
+* Regra de preço dinâmico por ocupação
+* Cálculo de permanência
+* Cálculo de receita por setor e data
+* Persistência em MySQL
+* Controle transacional com lock pessimista
+* Migração de banco com Flyway
+* Documentação Swagger/OpenAPI
+
+---
+
+# Regras de negócio implementadas
+
+## Entrada de veículos
+
+Ao receber um evento `ENTRY`:
+
+* Uma vaga livre é reservada
+* A vaga é marcada como ocupada
+* O preço por hora é calculado no momento da entrada
+* O preço fica congelado durante toda a permanência
+
+---
+
+## Evento PARKED
+
+O simulador envia latitude e longitude da vaga real.
+
+O sistema:
+
+* Identifica a vaga correta pelas coordenadas
+* Corrige o setor do veículo caso necessário
+* Atualiza o `ParkingRecord`
+
+---
+
+## Saída de veículos
+
+Ao receber um evento `EXIT`:
+
+* A vaga é liberada
+* O valor final é calculado
+* O faturamento é registrado
+
+---
+
+# Regras de cobrança
+
+## Até 30 minutos
+
+* Gratuito
+
+## Após 30 minutos
+
+Cobrança por hora com arredondamento para cima.
+
+Exemplo:
+
+* 61 minutos = 2 horas cobradas
+
+---
+
+# Preço dinâmico por ocupação
+
+| Ocupação     | Regra        |
+| ------------ | ------------ |
+| < 25%        | -10%         |
+| 25% até 50%  | preço normal |
+| 50% até 75%  | +10%         |
+| 75% até 100% | +25%         |
+
+---
+
+# Controle de concorrência
+
+O sistema utiliza:
+
+* `@Transactional`
+* `@Lock(PESSIMISTIC_WRITE)`
+
+para evitar que múltiplos veículos ocupem a mesma vaga simultaneamente.
+
+---
+
+# Estrutura do projeto
+
+```text
+src/main/kotlin/com/arthur/estapar/parking
+
+├── config
+├── controller
+├── exception
+├── model
+├── repository
+└── service
+```
+
+---
+
+# Ambiente de desenvolvimento
+
+Projeto desenvolvido e testado utilizando:
+
+* Windows 11
+* WSL2 Ubuntu
+* Docker Desktop
+* Java 21
+* Kotlin 2.1.x
+
+---
+
+# Estrutura Docker
+
+O ambiente sobe 3 containers:
+
+* `estacionamento-app`
+* `estacionamento-mysql`
+* `estacionamento-simulator`
+
+Todos conectados através da rede bridge compartilhada:
+
+```text
+estapar-net
+```
+
+---
+
+# Como executar via WSL
+
+## 1. Abrir WSL
 
 ```bash
-cp .env.example .env      # ajuste as variáveis se necessário
-docker-compose up --build
+wsl
 ```
 
-### Opção 2 — Manual
+---
+
+## 2. Entrar na pasta do projeto
 
 ```bash
-# 1. MySQL
-docker run -d \
-  --name estapar-mysql \
-  -e MYSQL_ROOT_PASSWORD=root \
-  -e MYSQL_DATABASE=estapar_parking \
-  -p 3306:3306 \
-  mysql:8
-
-# 2. Simulador
-docker run -d --network="host" cfontes0estapar/garage-sim:1.0.0
-
-# 3. Aplicação
-DB_USER=root DB_PASS=root ./gradlew bootRun
+cd /mnt/d/Workspace/Estacionamento
 ```
-
-A aplicação irá:
-1. Rodar as migrations Flyway automaticamente
-2. Buscar a configuração da garagem no simulador (`GET /garage`)
-3. Começar a escutar eventos em `POST /webhook`
 
 ---
 
-## Variáveis de ambiente
+## 3. Subir containers
 
-| Variável | Padrão | Descrição |
-|---|---|---|
-| `DB_USER` | `root` | Usuário do MySQL |
-| `DB_PASS` | `root` | Senha do MySQL |
-| `GARAGE_SIMULATOR_URL` | `http://localhost:8282` | URL do simulador |
-
-Copie `.env.example` para `.env` para configurar localmente. O arquivo `.env` está no `.gitignore` e nunca deve ser commitado.
+```bash
+docker compose up -d
+```
 
 ---
 
-## Endpoints
+## 4. Verificar containers
 
-### Webhook (recebe eventos do simulador)
-
+```bash
+docker ps
 ```
+
+Containers esperados:
+
+* estacionamento-app
+* estacionamento-mysql
+* estacionamento-simulator
+
+---
+
+# Logs da aplicação
+
+Visualizar logs completos:
+
+```bash
+docker compose logs -f
+```
+
+Logs apenas da aplicação:
+
+```bash
+docker logs -f estacionamento-app
+```
+
+---
+
+# Acesso ao MySQL
+
+Entrar no container:
+
+```bash
+docker exec -it estacionamento-mysql mysql -u root -p
+```
+
+Selecionar database:
+
+```sql
+USE estacionamento;
+```
+
+Ver tabelas:
+
+```sql
+SHOW TABLES;
+```
+
+Consultar registros:
+
+```sql
+SELECT * FROM parking_record ORDER BY id DESC LIMIT 10;
+```
+
+---
+
+# Acesso via MySQL Workbench
+
+Host:
+
+```text
+localhost
+```
+
+Porta:
+
+```text
+3307
+```
+
+Usuário:
+
+```text
+root
+```
+
+Senha:
+
+```text
+root
+```
+
+Database:
+
+```text
+estacionamento
+```
+
+---
+
+# Endpoints
+
+## Webhook
+
+```http
 POST /webhook
-Content-Type: application/json
 ```
 
-| Evento | Campos obrigatórios |
-|---|---|
-| `ENTRY` | `license_plate`, `entry_time`, `event_type` |
-| `PARKED` | `license_plate`, `lat`, `lng`, `event_type` |
-| `EXIT` | `license_plate`, `exit_time`, `event_type` |
+Recebe eventos do simulador:
 
-### Consulta de receita
+* ENTRY
+* PARKED
+* EXIT
 
+---
+
+## Receita
+
+```http
+GET /revenue?date=2026-05-23&sector=A
 ```
-GET /revenue
-Content-Type: application/json
 
-{ "date": "2025-01-01", "sector": "A" }
-```
+### Exemplo de resposta
 
-Resposta:
 ```json
-{ "amount": 120.00, "currency": "BRL", "timestamp": "2025-01-01T18:00:00.000Z" }
+{
+  "amount": 120.0,
+  "currency": "BRL",
+  "timestamp": "2026-05-23T18:00:00Z"
+}
 ```
 
 ---
 
-## Regras de negócio
+# Swagger
 
-| Situação | Comportamento |
-|---|---|
-| Permanência ≤ 30 min | Grátis |
-| Permanência > 30 min | Cobra por hora cheia (ceil), incluindo a primeira |
-| Lotação < 25% | Desconto de 10% no preço/hora |
-| Lotação < 50% | Preço normal |
-| Lotação < 75% | Acréscimo de 10% |
-| Lotação ≥ 75% | Acréscimo de 25% |
-| Lotação 100% | HTTP 409 — bloqueia novas entradas até liberar vaga |
+Disponível em:
+
+```text
+http://localhost:3003/swagger-ui.html
+```
 
 ---
 
-## Documentação interativa (Swagger UI)
+# Banco de dados
 
-Com a aplicação rodando, acesse:
+Tabelas principais:
 
-- **Swagger UI:** http://localhost:3003/swagger-ui.html
-- **OpenAPI JSON:** http://localhost:3003/api-docs
+* garage
+* spot
+* parking_record
+* vehicle_event
 
 ---
 
-## Rodando os testes
+# Flyway
+
+As migrations ficam em:
+
+```text
+src/main/resources/db/migration
+```
+
+---
+
+# Testes
+
+Executar testes:
 
 ```bash
 ./gradlew test
 ```
 
-Os testes usam H2 em memória — **não precisam de MySQL rodando**.
+Os testes utilizam:
+
+* H2 Database
+* Mockito
+* JUnit 5
 
 ---
 
-## Estrutura do projeto
+# Fluxo esperado da aplicação
 
+1. Aplicação inicia
+2. `GarageService` executa `@PostConstruct`
+3. Sistema consome `GET /garage`
+4. Setores e vagas são persistidos
+5. Simulador começa a enviar eventos para `/webhook`
+6. Sistema processa:
+
+  * ENTRY
+  * PARKED
+  * EXIT
+7. Receita fica disponível em:
+
+  * `GET /revenue`
+
+---
+
+# Observações técnicas
+
+## Sobre o simulador
+
+O simulador retorna `basePrice = 0.0` no endpoint `/garage`, porém internamente utiliza outro valor para cálculo da receita exibida nos logs do simulador.
+
+A aplicação utiliza exatamente os dados fornecidos pelo simulador conforme especificação do desafio.
+
+---
+
+## Sobre Docker no Windows
+
+O desafio original utilizava:
+
+```bash
+docker run --network="host"
 ```
-src/
-├── main/kotlin/com/estapar/parking/
-│   ├── config/        # WebhookConfig, OpenApiConfig
-│   ├── controller/    # WebhookController, RevenueController
-│   ├── exception/     # GlobalExceptionHandler, ErrorResponse
-│   ├── model/         # Garage, Spot, ParkingRecord, VehicleEvent, Revenue
-│   ├── repository/    # Interfaces JPA
-│   └── service/       # ParkingService, GarageService, RevenueService
-└── test/kotlin/com/estapar/parking/
-    ├── controller/    # WebhookControllerIntegrationTest
-    └── service/       # ParkingServiceTest, RevenueServiceTest
+
+Essa abordagem funciona nativamente apenas em Linux.
+
+Para compatibilidade com Docker Desktop no Windows/Mac, foi utilizada uma rede bridge compartilhada entre os containers.
+
+Também foi utilizado:
+
+```yaml
+extra_hosts:
+  - "localhost:host-gateway"
 ```
+
+para permitir que o simulador acessasse corretamente a aplicação Spring Boot.
+
+---
+
+# Autor
+
+Arthur Dué
+
+* Kotlin / Java Backend Developer
+* Spring Boot
+* Microsserviços
+* APIs REST
+* Docker
+* SQL / NoSQL
+
+Portfólio:
+
+[Portfolio Arthur Dué](https://portfolio-arthur-due.vercel.app/?utm_source=chatgpt.com)
