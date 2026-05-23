@@ -7,5 +7,5 @@ import org.springframework.boot.runApplication
 class EstacionamentoApplication
 
 fun main(args: Array<String>) {
-    runApplication<com.arthur.estapar.parking.EstacionamentoApplication>(*args)
+    runApplication<EstacionamentoApplication>(*args)
 }
