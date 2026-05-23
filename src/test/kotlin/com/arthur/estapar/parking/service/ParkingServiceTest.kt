@@ -15,9 +15,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.mockito.kotlin.*
 import java.time.LocalDateTime
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
-
 
 class ParkingServiceTest {
 
@@ -81,7 +78,7 @@ class ParkingServiceTest {
     @Test
     fun `deve aplicar desconto de 10 pct com lotacao abaixo de 25 pct`() {
         whenever(spotRepository.countBySector("A")).thenReturn(100L)
-        whenever(spotRepository.countBySectorAndIsOccupiedTrue("A")).thenReturn(20L) // 20%
+        whenever(spotRepository.countBySectorAndIsOccupiedTrue("A")).thenReturn(20L)
         val price = service.calculateDynamicPrice("A", basePrice = 10.0)
         assertEquals(9.0, price)
     }
@@ -89,7 +86,7 @@ class ParkingServiceTest {
     @Test
     fun `deve manter preco base com lotacao entre 25 e 50 pct`() {
         whenever(spotRepository.countBySector("A")).thenReturn(100L)
-        whenever(spotRepository.countBySectorAndIsOccupiedTrue("A")).thenReturn(40L) // 40%
+        whenever(spotRepository.countBySectorAndIsOccupiedTrue("A")).thenReturn(40L)
         val price = service.calculateDynamicPrice("A", basePrice = 10.0)
         assertEquals(10.0, price)
     }
@@ -97,7 +94,7 @@ class ParkingServiceTest {
     @Test
     fun `deve aumentar 10 pct com lotacao entre 50 e 75 pct`() {
         whenever(spotRepository.countBySector("A")).thenReturn(100L)
-        whenever(spotRepository.countBySectorAndIsOccupiedTrue("A")).thenReturn(60L) // 60%
+        whenever(spotRepository.countBySectorAndIsOccupiedTrue("A")).thenReturn(60L)
         val price = service.calculateDynamicPrice("A", basePrice = 10.0)
         assertEquals(11.0, price)
     }
@@ -105,7 +102,7 @@ class ParkingServiceTest {
     @Test
     fun `deve aumentar 25 pct com lotacao acima de 75 pct`() {
         whenever(spotRepository.countBySector("A")).thenReturn(100L)
-        whenever(spotRepository.countBySectorAndIsOccupiedTrue("A")).thenReturn(80L) // 80%
+        whenever(spotRepository.countBySectorAndIsOccupiedTrue("A")).thenReturn(80L)
         val price = service.calculateDynamicPrice("A", basePrice = 10.0)
         assertEquals(12.5, price)
     }
@@ -125,7 +122,7 @@ class ParkingServiceTest {
         val event = VehicleEvent(
             licensePlate = "ABC1234",
             eventType = "ENTRY",
-            entryTime = OffsetDateTime.of(2025, 1, 1, 12, 0, 0, 0, ZoneOffset.UTC)
+            entryTime = LocalDateTime.of(2025, 1, 1, 12, 0)
         )
 
         assertThrows<SectorFullException> {
@@ -148,15 +145,15 @@ class ParkingServiceTest {
         val event = VehicleEvent(
             licensePlate = "ABC1234",
             eventType = "ENTRY",
-            entryTime = OffsetDateTime.of(2025, 1, 1, 12, 0, 0, 0, ZoneOffset.UTC)
+            entryTime = LocalDateTime.of(2025, 1, 1, 12, 0)
         )
 
-        // Não deve lançar exceção, apenas ignorar
         service.processEntry(event)
 
-        // Não deve tentar salvar novo registro
-        verify(parkingRecordRepository, org.mockito.kotlin.never()).save(
-            org.mockito.kotlin.argThat<ParkingRecord> { id == 0L }
+        verify(parkingRecordRepository, never()).save(
+            argThat { record ->
+                record.id == 0L
+            }
         )
     }
 
@@ -173,7 +170,7 @@ class ParkingServiceTest {
         val event = VehicleEvent(
             licensePlate = "XYZ9999",
             eventType = "EXIT",
-            exitTime = OffsetDateTime.of(2025, 1, 1, 14, 0, 0, 0, ZoneOffset.UTC)
+            exitTime = LocalDateTime.of(2025, 1, 1, 14, 0)
         )
 
         assertThrows<RecordNotFoundException> {
@@ -202,23 +199,18 @@ class ParkingServiceTest {
         val exitEvent = VehicleEvent(
             licensePlate = "ABC1234",
             eventType = "EXIT",
-            exitTime = OffsetDateTime.of(2025, 1, 1, 13, 31, 0, 0, ZoneOffset.UTC) // 91 min → 2h
+            exitTime = LocalDateTime.of(2025, 1, 1, 13, 31) // 91 min → 2h
         )
 
         service.processExit(exitEvent)
 
-        verify(spotRepository).save(
-            org.mockito.kotlin.argThat<Spot> { !isOccupied }
-        )
         assertNotNull(record.exitTime)
         assertEquals(20.0, record.totalAmount) // 2h × R$10
     }
 
-
     // -----------------------------------------------------------------------
     // Testes de processParked
     // -----------------------------------------------------------------------
-
 
     @Test
     fun `deve confirmar vaga correta pelo lat lng no PARKED`() {
@@ -229,7 +221,7 @@ class ParkingServiceTest {
         )
 
         whenever(vehicleEventRepository.save(any())).thenAnswer { it.arguments[0] }
-        whenever(spotRepository.findByLatLng(-23.561684, -46.655981)).thenReturn(spot)
+        whenever(spotRepository.findAllByLatLng(-23.561684, -46.655981)).thenReturn(listOf(spot))
         whenever(spotRepository.save(any())).thenAnswer { it.arguments[0] }
         whenever(parkingRecordRepository.findByLicensePlateAndExitTimeIsNull("ZUL0001")).thenReturn(record)
 
@@ -242,17 +234,15 @@ class ParkingServiceTest {
 
         service.processParked(event)
 
-        verify(spotRepository).save(
-            org.mockito.kotlin.argThat<Spot> {
-                licensePlate == "ZUL0001" && isOccupied
-            }
-        )
+        verify(spotRepository).save(argThat { spot ->
+            spot.licensePlate == "ZUL0001" && spot.isOccupied
+        })
     }
 
     @Test
     fun `deve ignorar PARKED quando vaga nao e encontrada pelo lat lng`() {
         whenever(vehicleEventRepository.save(any())).thenAnswer { it.arguments[0] }
-        whenever(spotRepository.findByLatLng(any(), any())).thenReturn(null)
+        whenever(spotRepository.findAllByLatLng(any(), any())).thenReturn(emptyList())
 
         val event = VehicleEvent(
             licensePlate = "ZUL0001",
@@ -261,7 +251,6 @@ class ParkingServiceTest {
             lng = -99.0
         )
 
-        // Não deve lançar exceção — apenas logar e retornar
         service.processParked(event)
 
         verify(spotRepository, never()).save(any())
@@ -280,9 +269,6 @@ class ParkingServiceTest {
 
         service.processParked(event)
 
-        verify(spotRepository, never()).findByLatLng(any(), any())
+        verify(spotRepository, never()).findAllByLatLng(any(), any())
     }
-
 }
-
-

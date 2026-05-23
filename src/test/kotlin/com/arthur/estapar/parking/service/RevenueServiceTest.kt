@@ -35,18 +35,9 @@ class RevenueServiceTest {
             entryTime = LocalDateTime.of(2025, 1, 1, 10, 0),
             exitTime = LocalDateTime.of(2025, 1, 1, 12, 0),
             pricePerHour = 10.0,
-            totalAmount = 20.0  // 2 horas
-        )
-        val recordAindaEstacionado = ParkingRecord(
-            licensePlate = "XYZ9999",
-            sector = "A",
-            entryTime = LocalDateTime.of(2025, 1, 1, 11, 0),
-            exitTime = null,     // ainda no estacionamento
-            pricePerHour = 10.0,
-            totalAmount = null   // não cobrado ainda
+            totalAmount = 20.0
         )
 
-        // O repositório já filtra por exitTime, então só retorna o que saiu
         whenever(parkingRecordRepository.findBySectorAndExitTimeBetween(eq("A"), any(), any()))
             .thenReturn(listOf(recordSaiu))
 
@@ -58,12 +49,15 @@ class RevenueServiceTest {
     @Test
     fun `deve somar receita de multiplos veiculos`() {
         val records = listOf(
-            ParkingRecord(licensePlate = "AAA0001", sector = "A", entryTime = LocalDateTime.now(),
-                exitTime = LocalDateTime.now(), pricePerHour = 10.0, totalAmount = 10.0),
-            ParkingRecord(licensePlate = "BBB0002", sector = "A", entryTime = LocalDateTime.now(),
-                exitTime = LocalDateTime.now(), pricePerHour = 10.0, totalAmount = 20.0),
-            ParkingRecord(licensePlate = "CCC0003", sector = "A", entryTime = LocalDateTime.now(),
-                exitTime = LocalDateTime.now(), pricePerHour = 10.0, totalAmount = 30.0)
+            ParkingRecord(licensePlate = "AAA0001", sector = "A",
+                entryTime = LocalDateTime.now(), exitTime = LocalDateTime.now(),
+                pricePerHour = 10.0, totalAmount = 10.0),
+            ParkingRecord(licensePlate = "BBB0002", sector = "A",
+                entryTime = LocalDateTime.now(), exitTime = LocalDateTime.now(),
+                pricePerHour = 10.0, totalAmount = 20.0),
+            ParkingRecord(licensePlate = "CCC0003", sector = "A",
+                entryTime = LocalDateTime.now(), exitTime = LocalDateTime.now(),
+                pricePerHour = 10.0, totalAmount = 30.0)
         )
         whenever(parkingRecordRepository.findBySectorAndExitTimeBetween(eq("A"), any(), any()))
             .thenReturn(records)
