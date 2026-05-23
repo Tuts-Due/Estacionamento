@@ -10,6 +10,8 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    networks:
+      - estapar-net
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
       interval: 10s
@@ -19,7 +21,12 @@ services:
   simulator:
     image: cfontes0estapar/garage-sim:1.0.0
     container_name: estacionamento-simulator
-    network_mode: host
+    ports:
+      - "3000:3000"
+    networks:
+      - estapar-net
+    extra_hosts:
+      - "localhost:host-gateway"
 
   app:
     build: .
@@ -27,13 +34,21 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      simulator:
+        condition: service_started
     ports:
       - "3003:3003"
+    networks:
+      - estapar-net
     environment:
       DB_USER: root
       DB_PASS: root
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/estacionamento?createDatabaseIfNotExist=true
-      GARAGE_SIMULATOR_URL: http://simulator:3000
+      GARAGE_SIMULATOR_URL: http://estacionamento-simulator:3000
+
+networks:
+  estapar-net:
+    driver: bridge
 
 volumes:
   mysql_data:

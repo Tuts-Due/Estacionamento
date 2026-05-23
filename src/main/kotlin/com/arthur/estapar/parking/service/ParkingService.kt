@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Isolation
 import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
 import java.time.LocalDateTime
-import java.time.ZoneOffset
 import kotlin.math.ceil
 
 @Service
@@ -32,7 +31,7 @@ class ParkingService(
     fun processEntry(event: VehicleEvent) {
         vehicleEventRepository.save(event)
 
-        val entryTime = event.entryTime?.toLocalDateTime()
+        val entryTime = event.entryTime
             ?: throw IllegalArgumentException("entry_time obrigatório no evento ENTRY")
 
         // Verifica se o veículo já está estacionado (entrada duplicada)
@@ -42,25 +41,21 @@ class ParkingService(
             return
         }
 
-        // Neste momento não sabemos o setor exato — o evento PARKED confirmará.
-        // Buscamos o primeiro setor disponível. A lógica de setor é corrigida no PARKED.
         val allGarages = garageRepository.findAll()
         if (allGarages.isEmpty()) throw IllegalStateException("Nenhum setor cadastrado")
 
-        val garage = allGarages.first { garage ->
-            val available = spotRepository.findBySectorAndIsOccupiedFalse(garage.sector)
-            available.isNotEmpty()
-        }.let { g ->
-            g
-        }
+        // Busca o primeiro setor que ainda tem vaga livre
+        val garageWithSpot = allGarages.firstOrNull { garage ->
+            spotRepository.findBySectorAndIsOccupiedFalse(garage.sector).isNotEmpty()
+        } ?: throw SectorFullException("Todos os setores estão com lotação máxima")
 
         // findBySectorAndIsOccupiedFalse usa SELECT FOR UPDATE (PESSIMISTIC_WRITE).
         // Enquanto esta transação estiver aberta, nenhuma outra thread consegue ocupar
         // as mesmas vagas, eliminando a race condition em entradas simultâneas.
-        val availableSpots = spotRepository.findBySectorAndIsOccupiedFalse(garage.sector)
+        val availableSpots = spotRepository.findBySectorAndIsOccupiedFalse(garageWithSpot.sector)
         if (availableSpots.isEmpty()) {
-            log.warn("Estacionamento cheio no setor ${garage.sector}. Veículo ${event.licensePlate} bloqueado.")
-            throw SectorFullException("Setor ${garage.sector} está com lotação máxima")
+            log.warn("Estacionamento cheio no setor ${garageWithSpot.sector}. Veículo ${event.licensePlate} bloqueado.")
+            throw SectorFullException("Setor ${garageWithSpot.sector} está com lotação máxima")
         }
 
         val spotToOccupy = availableSpots.first()
@@ -68,18 +63,18 @@ class ParkingService(
         spotToOccupy.licensePlate = event.licensePlate
         spotRepository.save(spotToOccupy)
 
-        val dynamicPricePerHour = calculateDynamicPrice(garage.sector, garage.basePrice)
+        val dynamicPricePerHour = calculateDynamicPrice(garageWithSpot.sector, garageWithSpot.basePrice)
 
         val parkingRecord = ParkingRecord(
             licensePlate = event.licensePlate,
-            sector = garage.sector,
+            sector = garageWithSpot.sector,
             entryTime = entryTime,
             spot = spotToOccupy,
             pricePerHour = dynamicPricePerHour
         )
         parkingRecordRepository.save(parkingRecord)
 
-        log.info("ENTRY | placa=${event.licensePlate} | setor=${garage.sector} | vaga=${spotToOccupy.id} | preço/hora=$dynamicPricePerHour")
+        log.info("ENTRY | placa=${event.licensePlate} | setor=${garageWithSpot.sector} | vaga=${spotToOccupy.id} | preço/hora=$dynamicPricePerHour")
     }
 
     /**
@@ -96,11 +91,18 @@ class ParkingService(
         }
         val lng = event.lng!!
 
-        val spot = spotRepository.findByLatLng(lat, lng)
-        if (spot == null) {
+        // Busca lista em vez de único resultado — evita NonUniqueResultException
+        // quando múltiplas vagas têm coordenadas idênticas ou muito próximas
+        val candidates = spotRepository.findAllByLatLng(lat, lng)
+        if (candidates.isEmpty()) {
             log.warn("Vaga não encontrada para lat=$lat, lng=$lng no evento PARKED")
             return
         }
+
+        // Prioridade: vaga já associada à placa > vaga ocupada > primeira da lista
+        val spot = candidates.firstOrNull { it.licensePlate == event.licensePlate }
+            ?: candidates.firstOrNull { it.isOccupied }
+            ?: candidates.first()
 
         // Atualiza a placa na vaga (garante consistência)
         spot.licensePlate = event.licensePlate
@@ -111,7 +113,6 @@ class ParkingService(
         val record = parkingRecordRepository.findByLicensePlateAndExitTimeIsNull(event.licensePlate)
         if (record != null && record.sector != spot.sector) {
             log.info("PARKED | Corrigindo setor do veículo ${event.licensePlate}: ${record.sector} → ${spot.sector}")
-            // Como sector é val, criamos um novo registro substituindo o anterior
             val correctedRecord = record.copy(sector = spot.sector, spot = spot)
             parkingRecordRepository.delete(record)
             parkingRecordRepository.save(correctedRecord)
@@ -127,7 +128,7 @@ class ParkingService(
     fun processExit(event: VehicleEvent) {
         vehicleEventRepository.save(event)
 
-        val exitTime = event.exitTime?.toLocalDateTime()
+        val exitTime = event.exitTime
             ?: throw IllegalArgumentException("exit_time obrigatório no evento EXIT")
 
         val parkingRecord = parkingRecordRepository.findByLicensePlateAndExitTimeIsNull(event.licensePlate)
@@ -153,38 +154,19 @@ class ParkingService(
     // Regras de negócio
     // -------------------------------------------------------------------------
 
-    /**
-     * Calcula o preço por hora com base na lotação atual do setor no momento da entrada.
-     *
-     * < 25%  → desconto de 10%
-     * < 50%  → preço normal
-     * < 75%  → acréscimo de 10%
-     * >= 75% → acréscimo de 25%
-     */
     fun calculateDynamicPrice(sector: String, basePrice: Double): Double {
         val occupancyPct = calculateOccupancyPercentage(sector)
         return when {
-            occupancyPct < 25.0  -> basePrice * 0.90
-            occupancyPct < 50.0  -> basePrice * 1.00
-            occupancyPct < 75.0  -> basePrice * 1.10
-            else                  -> basePrice * 1.25
+            occupancyPct < 25.0 -> basePrice * 0.90
+            occupancyPct < 50.0 -> basePrice * 1.00
+            occupancyPct < 75.0 -> basePrice * 1.10
+            else                 -> basePrice * 1.25
         }
     }
 
-    /**
-     * Calcula o valor final da permanência.
-     *
-     * - Até 30 min → grátis
-     * - Após 30 min → cobra por hora cheia (ceil), incluindo a primeira hora
-     *
-     * Ex: 31 min → 1h → 1 × pricePerHour
-     *     90 min → 2h → 2 × pricePerHour
-     */
     fun calculateFinalAmount(entryTime: LocalDateTime, exitTime: LocalDateTime, pricePerHour: Double): Double {
         val minutesParked = Duration.between(entryTime, exitTime).toMinutes()
-
         if (minutesParked <= 30) return 0.0
-
         val hours = ceil(minutesParked / 60.0)
         return hours * pricePerHour
     }

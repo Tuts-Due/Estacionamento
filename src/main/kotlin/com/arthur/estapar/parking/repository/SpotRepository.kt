@@ -25,7 +25,8 @@ interface SpotRepository : JpaRepository<Spot, Long> {
 
     fun countBySector(sector: String): Long
 
-    // Busca a vaga pelo lat/lng para confirmar setor no evento PARKED
+    // Retorna LISTA para evitar NonUniqueResultException quando múltiplas vagas
+    // compartilham coordenadas próximas (tolerância de 0.0001 grau)
     @Query("SELECT s FROM Spot s WHERE ABS(s.lat - :lat) < 0.0001 AND ABS(s.lng - :lng) < 0.0001")
-    fun findByLatLng(lat: Double, lng: Double): Spot?
+    fun findAllByLatLng(lat: Double, lng: Double): List<Spot>
 }

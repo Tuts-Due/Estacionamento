@@ -1,11 +1,13 @@
 package com.arthur.estapar.parking.model
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
+import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer
 import jakarta.persistence.Entity
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
-import java.time.OffsetDateTime
+import java.time.LocalDateTime
 
 @Entity
 data class VehicleEvent(
@@ -18,12 +20,11 @@ data class VehicleEvent(
     @JsonProperty("event_type")
     val eventType: String,
 
-    // entry_time e exit_time chegam como ISO-8601 com offset (ex: 2025-01-01T12:00:00.000Z)
     @JsonProperty("entry_time")
-    val entryTime: OffsetDateTime? = null,
+    val entryTime: LocalDateTime? = null,
 
     @JsonProperty("exit_time")
-    val exitTime: OffsetDateTime? = null,
+    val exitTime: LocalDateTime? = null,
 
     val lat: Double? = null,
     val lng: Double? = null
