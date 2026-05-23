@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDate
 
@@ -74,9 +75,9 @@ class RevenueController(
         )]
     )
     @GetMapping
-    fun getRevenue(@RequestBody request: RevenueRequest): ResponseEntity<Revenue> {
-        val date = LocalDate.parse(request.date)
-        val revenue = revenueService.calculateRevenue(date, request.sector)
+    fun getRevenue(@RequestParam date: String, @RequestParam sector: String): ResponseEntity<Revenue> {
+        val parsedDate = LocalDate.parse(date)
+        val revenue = revenueService.calculateRevenue(parsedDate, sector)
         return ResponseEntity.ok(revenue)
     }
 }
