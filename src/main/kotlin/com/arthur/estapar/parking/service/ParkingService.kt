@@ -34,7 +34,6 @@ class ParkingService(
         val entryTime = event.entryTime
             ?: throw IllegalArgumentException("entry_time obrigatório no evento ENTRY")
 
-        // Verifica se o veículo já está estacionado (entrada duplicada)
         val existingRecord = parkingRecordRepository.findByLicensePlateAndExitTimeIsNull(event.licensePlate)
         if (existingRecord != null) {
             log.warn("Veículo ${event.licensePlate} já possui registro de entrada ativo. Ignorando duplicata.")
@@ -44,7 +43,6 @@ class ParkingService(
         val allGarages = garageRepository.findAll()
         if (allGarages.isEmpty()) throw IllegalStateException("Nenhum setor cadastrado")
 
-        // Busca o primeiro setor que ainda tem vaga livre
         val garageWithSpot = allGarages.firstOrNull { garage ->
             spotRepository.findBySectorAndIsOccupiedFalse(garage.sector).isNotEmpty()
         } ?: throw SectorFullException("Todos os setores estão com lotação máxima")
@@ -85,14 +83,15 @@ class ParkingService(
     fun processParked(event: VehicleEvent) {
         vehicleEventRepository.save(event)
 
-        val lat = event.lat ?: run {
+        val lat = event.lat
+        val lng = event.lng
+
+        if (lat == null || lng == null) {
             log.warn("PARKED sem lat/lng para veículo ${event.licensePlate}")
             return
         }
-        val lng = event.lng!!
 
-        // Busca lista em vez de único resultado — evita NonUniqueResultException
-        // quando múltiplas vagas têm coordenadas idênticas ou muito próximas
+        //Evita NonUniqueResultException quando múltiplas vagas possuem coordenadas próximas
         val candidates = spotRepository.findAllByLatLng(lat, lng)
         if (candidates.isEmpty()) {
             log.warn("Vaga não encontrada para lat=$lat, lng=$lng no evento PARKED")
@@ -104,12 +103,10 @@ class ParkingService(
             ?: candidates.firstOrNull { it.isOccupied }
             ?: candidates.first()
 
-        // Atualiza a placa na vaga (garante consistência)
         spot.licensePlate = event.licensePlate
         spot.isOccupied = true
         spotRepository.save(spot)
 
-        // Atualiza o setor no ParkingRecord se necessário
         val record = parkingRecordRepository.findByLicensePlateAndExitTimeIsNull(event.licensePlate)
         if (record != null && record.sector != spot.sector) {
             log.info("PARKED | Corrigindo setor do veículo ${event.licensePlate}: ${record.sector} → ${spot.sector}")
@@ -179,6 +176,6 @@ class ParkingService(
     }
 }
 
-// Exceções de domínio para retornar HTTP adequado via GlobalExceptionHandler
+//Exceções de domínio
 class SectorFullException(message: String) : RuntimeException(message)
 class RecordNotFoundException(message: String) : RuntimeException(message)

@@ -31,10 +31,8 @@ data class ParkingRecord(
     @JoinColumn(name = "spot_id")
     var spot: Spot? = null,
 
-    // Preço por hora calculado dinamicamente no momento da entrada
     @Column(nullable = false)
     val pricePerHour: Double,
 
-    // Valor total cobrado — preenchido apenas na saída
     var totalAmount: Double? = null
 )

@@ -10,7 +10,6 @@ interface ParkingRecordRepository : JpaRepository<ParkingRecord, Long> {
 
     fun findByLicensePlateAndExitTimeIsNull(licensePlate: String): ParkingRecord?
 
-    // Receita: apenas registros com saída registrada (totalAmount preenchido)
     fun findBySectorAndExitTimeBetween(
         sector: String,
         start: LocalDateTime,

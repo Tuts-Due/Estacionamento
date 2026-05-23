@@ -39,7 +39,7 @@ class GarageService(
             ?: throw IllegalStateException("Resposta vazia do simulador em $simulatorUrl/garage")
 
         garageConfig.garage.forEach { simGarage ->
-            // Evita duplicar dados se a aplicação reiniciar
+
             val existing = garageRepository.findBySector(simGarage.sector)
             if (existing == null) {
                 garageRepository.save(
@@ -68,7 +68,6 @@ class GarageService(
         log.info("Configuração da garagem carregada: ${garageConfig.garage.size} setor(es), ${garageConfig.spots.size} vaga(s)")
     }
 
-    // DTOs para desserializar a resposta do simulador
     data class SimulatorGarageConfig(
         val garage: List<SimulatorGarage>,
         val spots: List<SimulatorSpot>
