@@ -1,1 +1,1 @@
-rootProject.name = "estacionamento-api"
+rootProject.name = "parking-api"

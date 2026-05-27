@@ -13,19 +13,11 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDate
 
-data class RevenueRequest(
-    @Schema(description = "Data de consulta no formato YYYY-MM-DD", example = "2025-01-01")
-    val date: String,
-
-    @Schema(description = "Identificador do setor da garagem", example = "A")
-    val sector: String
-)
 
 @RestController
 @RequestMapping("/revenue")
@@ -62,17 +54,6 @@ class RevenueController(
                 schema = Schema(implementation = ErrorResponse::class)
             )]
         )
-    )
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(
-        description = "Filtro de data e setor",
-        required = true,
-        content = [Content(
-            mediaType = MediaType.APPLICATION_JSON_VALUE,
-            examples = [ExampleObject(
-                name = "Consulta setor A em 01/01/2025",
-                value = """{"date": "2025-01-01", "sector": "A"}"""
-            )]
-        )]
     )
     @GetMapping
     fun getRevenue(@RequestParam date: String, @RequestParam sector: String): ResponseEntity<Revenue> {

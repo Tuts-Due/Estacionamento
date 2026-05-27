@@ -2,16 +2,16 @@ services:
 
   mysql:
     image: mysql:8.0
-    container_name: estacionamento-mysql
+    container_name: parking-mysql
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: estacionamento
+      MYSQL_DATABASE: parking
     ports:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     networks:
-      - estapar-net
+      - parking-net
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
       interval: 10s
@@ -20,17 +20,17 @@ services:
 
   simulator:
     image: cfontes0estapar/garage-sim:1.0.0
-    container_name: estacionamento-simulator
+    container_name: parking-simulator
     ports:
       - "3000:3000"
     networks:
-      - estapar-net
+      - parking-net
     extra_hosts:
       - "localhost:host-gateway"
 
   app:
     build: .
-    container_name: estacionamento-app
+    container_name: parking-app
     depends_on:
       mysql:
         condition: service_healthy
@@ -39,15 +39,15 @@ services:
     ports:
       - "3003:3003"
     networks:
-      - estapar-net
+      - parking-net
     environment:
       DB_USER: root
       DB_PASS: root
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/estacionamento?createDatabaseIfNotExist=true
-      GARAGE_SIMULATOR_URL: http://estacionamento-simulator:3000
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/parking?createDatabaseIfNotExist=true
+      GARAGE_SIMULATOR_URL: http://parking-simulator:3000
 
 networks:
-  estapar-net:
+  parking-net:
     driver: bridge
 
 volumes:

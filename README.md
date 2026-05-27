@@ -51,7 +51,7 @@ Ao receber um evento `ENTRY`:
 * Uma vaga livre é reservada
 * A vaga é marcada como ocupada
 * O preço por hora é calculado no momento da entrada
-* O preço fica congelado durante toda a permanência
+* O preço por hora é definido no momento da entrada e permanece fixo até a saída do veículo
 
 ---
 
@@ -146,14 +146,14 @@ Projeto desenvolvido e testado utilizando:
 
 O ambiente sobe 3 containers:
 
-* `estacionamento-app`
-* `estacionamento-mysql`
-* `estacionamento-simulator`
+* `parking-app`
+* `parking-mysql`
+* `parking-simulator`
 
 Todos conectados através da rede bridge compartilhada:
 
 ```text
-estapar-net
+parking-net
 ```
 
 ---
@@ -172,7 +172,6 @@ wsl
 
 ```bash
 cd /mnt/d/Workspace/Estacionamento
-```
 
 ---
 
@@ -192,9 +191,9 @@ docker ps
 
 Containers esperados:
 
-* estacionamento-app
-* estacionamento-mysql
-* estacionamento-simulator
+* parking-app
+* parking-mysql
+* parking-simulator
 
 ---
 
@@ -209,7 +208,7 @@ docker compose logs -f
 Logs apenas da aplicação:
 
 ```bash
-docker logs -f estacionamento-app
+docker logs -f parking-app
 ```
 
 ---
@@ -219,13 +218,13 @@ docker logs -f estacionamento-app
 Entrar no container:
 
 ```bash
-docker exec -it estacionamento-mysql mysql -u root -p
+docker exec -it parking-mysql mysql -u root -p
 ```
 
 Selecionar database:
 
 ```sql
-USE estacionamento;
+USE parking;
 ```
 
 Ver tabelas:
@@ -271,7 +270,7 @@ root
 Database:
 
 ```text
-estacionamento
+parking
 ```
 
 ---
